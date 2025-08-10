@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SkyCool Comparison Tool</title>
+    <style>
+      body {
+        font-family: sans-serif;
+        margin: 0;
+        padding: 0;
+        background: #f7f7f7;
+        color: #333;
+      }
+      header {
+        background: #003366;
+        color: #fff;
+        padding: 1rem;
+        text-align: center;
+      }
+      main {
+        padding: 1rem;
+        max-width: 1200px;
+        margin: 0 auto;
+      }
+      section {
+        background: #fff;
+        margin-bottom: 1rem;
+        padding: 1rem;
+        border-radius: 8px;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+      }
+      h2 {
+        margin-top: 0;
+      }
+      .inputs {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 1rem;
+      }
+      .input-group {
+        flex: 1 1 200px;
+        display: flex;
+        flex-direction: column;
+      }
+      .input-group label {
+        font-size: 0.9rem;
+        margin-bottom: 0.25rem;
+      }
+      .input-group input {
+        padding: 0.4rem;
+        font-size: 1rem;
+      }
+      .results {
+        margin-top: 1rem;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+      th, td {
+        border: 1px solid #ddd;
+        padding: 0.5rem;
+        text-align: right;
+      }
+      th {
+        background: #f0f0f0;
+      }
+    </style>
+    <!-- Load React and ReactDOM from CDNs -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script crossorigin src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  </head>
+  <body>
+    <header>
+      <h1>SkyCool Technology Comparisons</h1>
+    </header>
+    <main id="app"></main>
+    <script type="text/babel">
+      const { useState } = React;
+
+      /**
+       * Calculate IRR for a stream of cash flows.
+       * Cash flows: array of numbers, first element at t=0.
+       * Returns rate as decimal (e.g. 0.2 for 20%).
+       */
+      function calcIRR(cashFlows) {
+        let low = -0.9;
+        let high = 1.0;
+        const npv = (rate) => {
+          return cashFlows.reduce((acc, val, idx) => acc + val / Math.pow(1 + rate, idx), 0);
+        };
+        for (let i = 0; i < 50; i++) {
+          const mid = (low + high) / 2;
+          const val = npv(mid);
+          if (val > 0) {
+            low = mid;
+          } else {
+            high = mid;
+          }
+        }
+        return (low + high) / 2;
+      }
+
+      function formatNumber(n) {
+        // Round values above $10 to the nearest dollar. For values ≤ 10 keep two decimals.
+        if (Math.abs(n) > 10) {
+          return Math.round(n).toLocaleString();
+        }
+        return n.toLocaleString(undefined, { maximumFractionDigits: 2 });
+      }
+
+      // Prefix formatted numbers with a dollar sign for currency outputs
+      function formatCurrency(n) {
+        return '$' + formatNumber(n);
+      }
+
+      function SkyPvComparison() {
+        const [area, setArea] = useState(1);
+        const [skyCost, setSkyCost] = useState(400);
+        const [pvCost, setPvCost] = useState(400);
+        const [skyPower, setSkyPower] = useState(300);
+        const [pvPower, setPvPower] = useState(120);
+        const [sunHours, setSunHours] = useState(6);
+        const [cop, setCOP] = useState(3.5);
+        const [elecPrice, setElecPrice] = useState(0.10);
+        const years = 20;
+
+        // Derived values
+        const skyLoadW = skyPower * area; // W heat rejected
+        const skyEnergy = skyLoadW * 24 * 365 / 1000; // kWh per year
+        const pvEnergy = pvPower * area * sunHours * 365 / 1000; // PV electricity kWh per year
+        const pvCooling = pvEnergy * cop; // kWh of cooling delivered via chiller
+
+        const skyAnnualValue = (skyEnergy / cop) * elecPrice; // saved electricity cost
+        const pvAnnualValue = pvEnergy * elecPrice; // value of electricity produced
+        const skyCostTotal = skyCost * area;
+        const pvCostTotal = pvCost * area;
+
+        const skyIRR = calcIRR([-skyCostTotal, ...Array(years).fill(skyAnnualValue)]);
+        const pvIRR = calcIRR([-pvCostTotal, ...Array(years).fill(pvAnnualValue)]);
+
+        const diffAnnual = skyAnnualValue - pvAnnualValue;
+        const diffCost = skyCostTotal - pvCostTotal;
+        let diffIRR = null;
+        if (Math.abs(diffCost) > 1e-6) {
+          diffIRR = calcIRR([-diffCost, ...Array(years).fill(diffAnnual)]);
+        }
+
+        return (
+          <section>
+            <h2>SkyCool vs. Solar PV</h2>
+            <div className="inputs">
+              <div className="input-group">
+                <label>Panel area (m²)</label>
+                <input type="number" value={area} min="0.1" step="0.1" onChange={(e) => setArea(parseFloat(e.target.value) || 0)} />
+              </div>
+              <div className="input-group">
+                <label>SkyCool cost ($/m²)</label>
+                <input type="number" value={skyCost} min="0" step="10" onChange={(e) => setSkyCost(parseFloat(e.target.value) || 0)} />
+              </div>
+              <div className="input-group">
+                <label>PV cost ($/m²)</label>
+                <input type="number" value={pvCost} min="0" step="10" onChange={(e) => setPvCost(parseFloat(e.target.value) || 0)} />
+              </div>
+              <div className="input-group">
+                <label>SkyCool heat rejection (W/m²)</label>
+                <input type="number" value={skyPower} min="0" step="10" onChange={(e) => setSkyPower(parseFloat(e.target.value) || 0)} />
+              </div>
+              <div className="input-group">
+                <label>PV output (W/m²)</label>
+                <input type="number" value={pvPower} min="0" step="10" onChange={(e) => setPvPower(parseFloat(e.target.value) || 0)} />
+              </div>
+              <div className="input-group">
+                <label>Sun hours per day</label>
+                <input type="number" value={sunHours} min="0" step="0.5" onChange={(e) => setSunHours(parseFloat(e.target.value) || 0)} />
+              </div>
+              <div className="input-group">
+                <label>Chiller COP</label>
+                <input type="number" value={cop} min="1" step="0.1" onChange={(e) => setCOP(parseFloat(e.target.value) || 0)} />
+              </div>
+              <div className="input-group">
+                <label>Electricity price ($/kWh)</label>
+                <input type="number" value={elecPrice} min="0" step="0.01" onChange={(e) => setElecPrice(parseFloat(e.target.value) || 0)} />
+              </div>
+            </div>
+            <div className="results">
+              <table>
+                <thead>
+                  <tr>
+                    <th></th>
+                    <th>SkyCool</th>
+                    <th>PV</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                  <td>Upfront cost ($)</td>
+                    <td>{formatCurrency(skyCostTotal)}</td>
+                    <td>{formatCurrency(pvCostTotal)}</td>
+                  </tr>
+                  <tr>
+                    <td>Annual value ($/yr)</td>
+                    <td>{formatCurrency(skyAnnualValue)}</td>
+                    <td>{formatCurrency(pvAnnualValue)}</td>
+                  </tr>
+                  <tr>
+                    <td>20‑yr IRR</td>
+                    <td>{skyIRR ? (skyIRR * 100).toFixed(1) + '%' : 'N/A'}</td>
+                    <td>{pvIRR ? (pvIRR * 100).toFixed(1) + '%' : 'N/A'}</td>
+                  </tr>
+                  <tr>
+                    <td>Delta IRR (Sky‑PV)</td>
+                    <td colSpan="2">{diffIRR !== null ? (diffIRR * 100).toFixed(1) + '%' : '∞'}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+        );
+      }
+
+      function ChillerComparison() {
+        const [elecPrice, setElecPrice] = useState(0.10);
+        const [waterPrice, setWaterPrice] = useState(6.08);
+        // per W costs derived from report defaults
+        const [skyCost, setSkyCost] = useState(1.30);
+        const [dryCost, setDryCost] = useState(0.34);
+        const [adiCost, setAdiCost] = useState(0.23);
+        const [wetCost, setWetCost] = useState(0.48);
+        const [copDry, setCopDry] = useState(3.5);
+        const [copWet, setCopWet] = useState(5.9);
+        const [copAdi, setCopAdi] = useState(4.5);
+        // water consumption per W-year (gal): 4.5 for wet, 0.9 for adiabatic, 0 for dry
+        const wetWaterGal = 4.5;
+        const adiWaterGal = wetWaterGal * 0.2;
+
+        const years = 20;
+
+        function computeIRR(costSky, costOther, savings) {
+          const diffCost = costSky - costOther;
+          const cash = [-diffCost, ...Array(years).fill(savings)];
+          return calcIRR(cash);
+        }
+
+        function computeSavings(cop, waterGal) {
+          const elec = 8.76 / cop * elecPrice; // $ per W-year
+          const water = (waterGal / 1000) * waterPrice; // waterPrice is per 1000 gal
+          return elec + water;
+        }
+
+        const drySavings = computeSavings(copDry, 0);
+        const wetSavings = computeSavings(copWet, wetWaterGal);
+        const adiSavings = computeSavings(copAdi, adiWaterGal);
+
+        const irrDry = computeIRR(skyCost, dryCost, drySavings);
+        const irrWet = computeIRR(skyCost, wetCost, wetSavings);
+        const irrAdi = computeIRR(skyCost, adiCost, adiSavings);
+
+        return (
+          <section>
+            <h2>SkyCool vs. Chillers</h2>
+            <div className="inputs">
+              <div className="input-group">
+                <label>Electricity price ($/kWh)</label>
+                <input type="number" value={elecPrice} step="0.01" min="0" onChange={(e) => setElecPrice(parseFloat(e.target.value) || 0)} />
+              </div>
+              <div className="input-group">
+                <label>Water price ($/1000 gal)</label>
+                <input type="number" value={waterPrice} step="0.1" min="0" onChange={(e) => setWaterPrice(parseFloat(e.target.value) || 0)} />
+              </div>
+              <div className="input-group">
+                <label>SkyCool cost ($/W)</label>
+                <input type="number" value={skyCost} step="0.01" min="0" onChange={(e) => setSkyCost(parseFloat(e.target.value) || 0)} />
+              </div>
+              <div className="input-group">
+                <label>Dry chiller cost ($/W)</label>
+                <input type="number" value={dryCost} step="0.01" min="0" onChange={(e) => setDryCost(parseFloat(e.target.value) || 0)} />
+              </div>
+              <div className="input-group">
+                <label>Adiabatic cooler cost ($/W)</label>
+                <input type="number" value={adiCost} step="0.01" min="0" onChange={(e) => setAdiCost(parseFloat(e.target.value) || 0)} />
+              </div>
+              <div className="input-group">
+                <label>Wet chiller cost ($/W)</label>
+                <input type="number" value={wetCost} step="0.01" min="0" onChange={(e) => setWetCost(parseFloat(e.target.value) || 0)} />
+              </div>
+              <div className="input-group">
+                <label>Dry chiller COP</label>
+                <input type="number" value={copDry} step="0.1" min="1" onChange={(e) => setCopDry(parseFloat(e.target.value) || 0)} />
+              </div>
+              <div className="input-group">
+                <label>Adiabatic chiller COP</label>
+                <input type="number" value={copAdi} step="0.1" min="1" onChange={(e) => setCopAdi(parseFloat(e.target.value) || 0)} />
+              </div>
+              <div className="input-group">
+                <label>Wet chiller COP</label>
+                <input type="number" value={copWet} step="0.1" min="1" onChange={(e) => setCopWet(parseFloat(e.target.value) || 0)} />
+              </div>
+            </div>
+            <div className="results">
+              <table>
+                <thead>
+                  <tr>
+                    <th></th>
+                    <th>Dry</th>
+                    <th>Adiabatic</th>
+                    <th>Wet</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                  <td>Capital cost difference ($/W)</td>
+                    <td>{formatCurrency(skyCost - dryCost)}</td>
+                    <td>{formatCurrency(skyCost - adiCost)}</td>
+                    <td>{formatCurrency(skyCost - wetCost)}</td>
+                  </tr>
+                  <tr>
+                  <td>Operating savings ($/W‑yr)</td>
+                    <td>{formatCurrency(drySavings)}</td>
+                    <td>{formatCurrency(adiSavings)}</td>
+                    <td>{formatCurrency(wetSavings)}</td>
+                  </tr>
+                  <tr>
+                    <td>20‑yr IRR</td>
+                    <td>{(irrDry * 100).toFixed(1) + '%'}</td>
+                    <td>{(irrAdi * 100).toFixed(1) + '%'}</td>
+                    <td>{(irrWet * 100).toFixed(1) + '%'}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+        );
+      }
+
+      function App() {
+        return (
+          <>
+            <SkyPvComparison />
+            <ChillerComparison />
+      <DataCenterComparison />
+          </>
+        );
+      }
+
+      /**
+       * Data center comparison component
+       * Compares a hyperscale data center cooled entirely with chillers to one
+       * supplemented by SkyCool panels. Users can adjust the IT load, PUE,
+       * fraction of cooling load handled by SkyCool, chiller type, and
+       * economic assumptions. The component reuses cost and COP defaults
+       * derived from the research report.
+       */
+      function DataCenterComparison() {
+        // User-adjustable inputs
+        const [location, setLocation] = useState('West Texas');
+        const [itLoad, setItLoad] = useState(1000); // MW (default 1 GW)
+        const [pue, setPue] = useState(1.2);
+        const [fractionSky, setFractionSky] = useState(0.2); // fraction of load served by SkyCool
+        const [elecPrice, setElecPrice] = useState(0.10);
+        const [waterPrice, setWaterPrice] = useState(6.08);
+        const [chillerType, setChillerType] = useState('dry');
+        const [landValue, setLandValue] = useState(100000); // $ per acre of land
+        // Cost per W and COP for each chiller type (defaults from report)
+        const [dryCost, setDryCost] = useState(0.34);
+        const [adiCost, setAdiCost] = useState(0.23);
+        const [wetCost, setWetCost] = useState(0.48);
+        const [copDry, setCopDry] = useState(3.5);
+        const [copAdi, setCopAdi] = useState(4.5);
+        const [copWet, setCopWet] = useState(5.9);
+        // SkyCool specs
+        const skyRejectPerSqM = 300; // W per m2
+        const skyCostPerSqM = 400; // $ per m2
+        const skyCostPerW = skyCostPerSqM / skyRejectPerSqM;
+        const years = 20;
+
+        // Derived values
+        // Total cooling load = IT load * (PUE - 1) (W)
+        // Convert IT load from MW to W for calculations
+        const itLoadW = itLoad * 1_000_000;
+        const coolingLoad = itLoadW * (pue - 1);
+        // Choose chiller cost and COP based on type
+        const chillerCostPerW = chillerType === 'dry' ? dryCost : chillerType === 'adiabatic' ? adiCost : wetCost;
+        const chillerCOP = chillerType === 'dry' ? copDry : chillerType === 'adiabatic' ? copAdi : copWet;
+        // Water consumption per W-year (gal) for each type
+        const wetWaterGal = 4.5; // gal per W-year for wet (1.8 gal/ton-hr => 1.8*12 = 21.6, convert to 4.5 for W-year) – from report
+        const adiWaterGal = wetWaterGal * 0.2;
+        const waterGalPerWYear = chillerType === 'dry' ? 0 : chillerType === 'adiabatic' ? adiWaterGal : wetWaterGal;
+
+        // Baseline: chiller-only system
+        const baselineCapEx = chillerCostPerW * coolingLoad;
+        const baselineEnergyCost = (8.76 * coolingLoad / chillerCOP) * elecPrice; // $ per year
+        const baselineWaterCost = (waterGalPerWYear / 1000) * waterPrice * coolingLoad; // $ per year
+        const baselineOpEx = baselineEnergyCost + baselineWaterCost;
+
+        // SkyCool hybrid: fraction of cooling load handled by SkyCool
+        const skyLoad = fractionSky * coolingLoad;
+        const chillerLoad = (1 - fractionSky) * coolingLoad;
+        // Area of SkyCool panels needed
+        const skyArea = skyLoad / skyRejectPerSqM;
+        // CapEx for SkyCool panels and residual chiller capacity
+        const skyCapEx = skyCostPerW * skyLoad;
+        const hybridChillerCapEx = chillerCostPerW * chillerLoad;
+        const hybridCapEx = skyCapEx + hybridChillerCapEx;
+        // Land cost for SkyCool panels (chiller-only assumed zero)
+        const landCost = (skyArea / 4046.86) * landValue;
+        // OpEx for hybrid system
+        const hybridEnergyCost = (8.76 * chillerLoad / chillerCOP) * elecPrice;
+        const hybridWaterCost = (waterGalPerWYear / 1000) * waterPrice * chillerLoad;
+        const hybridOpEx = hybridEnergyCost + hybridWaterCost;
+
+        // Difference between baseline and hybrid
+        const capExDiff = (hybridCapEx + landCost) - baselineCapEx;
+        const opExSavings = baselineOpEx - hybridOpEx;
+
+        const irr = calcIRR([-capExDiff, ...Array(years).fill(opExSavings)]);
+
+        return (
+          <section>
+            <h2>Data Center Comparison</h2>
+            <div className="inputs">
+              <div className="input-group">
+                <label>Location</label>
+                <input type="text" value={location} onChange={(e) => setLocation(e.target.value)} />
+              </div>
+              <div className="input-group">
+                <label>IT load (MW)</label>
+                <input type="number" value={itLoad} min="1" step="10" onChange={(e) => setItLoad(parseFloat(e.target.value) || 0)} />
+              </div>
+              <div className="input-group">
+                <label>PUE</label>
+                <input type="number" value={pue} min="1" step="0.01" onChange={(e) => setPue(parseFloat(e.target.value) || 1)} />
+              </div>
+              <div className="input-group">
+                <label>Fraction cooled by SkyCool</label>
+                <input type="number" value={fractionSky} min="0" max="1" step="0.05" onChange={(e) => setFractionSky(Math.min(Math.max(parseFloat(e.target.value) || 0, 0), 1))} />
+              </div>
+              <div className="input-group">
+                <label>Chiller type</label>
+                <select value={chillerType} onChange={(e) => setChillerType(e.target.value)}>
+                  <option value="dry">Dry</option>
+                  <option value="adiabatic">Adiabatic</option>
+                  <option value="wet">Wet</option>
+                </select>
+              </div>
+              <div className="input-group">
+                <label>Electricity price ($/kWh)</label>
+                <input type="number" value={elecPrice} step="0.01" min="0" onChange={(e) => setElecPrice(parseFloat(e.target.value) || 0)} />
+              </div>
+              <div className="input-group">
+                <label>Water price ($/1000 gal)</label>
+                <input type="number" value={waterPrice} step="0.1" min="0" onChange={(e) => setWaterPrice(parseFloat(e.target.value) || 0)} />
+              </div>
+              <div className="input-group">
+                <label>Land value ($/acre)</label>
+                <input type="number" value={landValue} step="1000" min="0" onChange={(e) => setLandValue(parseFloat(e.target.value) || 0)} />
+              </div>
+            </div>
+            <div className="results">
+              <table>
+                <thead>
+                  <tr>
+                    <th></th>
+                    <th>Chiller Only</th>
+                    <th>SkyCool + Chiller</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                  <td>Capital cost ($)</td>
+                    <td>{formatCurrency(baselineCapEx)}</td>
+                    <td>{formatCurrency(hybridCapEx)}</td>
+                  </tr>
+                  <tr>
+                    <td>Land cost ($)</td>
+                    <td>{formatCurrency(0)}</td>
+                    <td>{formatCurrency(landCost)}</td>
+                  </tr>
+                  <tr>
+                    <td>Annual energy cost ($/yr)</td>
+                    <td>{formatCurrency(baselineEnergyCost)}</td>
+                    <td>{formatCurrency(hybridEnergyCost)}</td>
+                  </tr>
+                  <tr>
+                    <td>Annual water cost ($/yr)</td>
+                    <td>{formatCurrency(baselineWaterCost)}</td>
+                    <td>{formatCurrency(hybridWaterCost)}</td>
+                  </tr>
+                  <tr>
+                    <td>Total annual operating cost ($/yr)</td>
+                    <td>{formatCurrency(baselineOpEx)}</td>
+                    <td>{formatCurrency(hybridOpEx)}</td>
+                  </tr>
+                  <tr>
+                    <td>SkyCool area (m²)</td>
+                    <td colSpan="2">{formatNumber(skyArea)}</td>
+                  </tr>
+                  <tr>
+                    <td>SkyCool area (acres)</td>
+                    <td colSpan="2">{formatNumber(skyArea / 4046.86)}</td>
+                  </tr>
+                  <tr>
+                    <td>20‑yr IRR (vs. chiller only)</td>
+                    <td colSpan="2">{(irr * 100).toFixed(1) + '%'}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+        );
+      }
+
+      ReactDOM.createRoot(document.getElementById('app')).render(<App />);
+    </script>
+  </body>
+</html>
