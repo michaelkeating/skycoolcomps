@@ -66,6 +66,21 @@
       th {
         background: #f0f0f0;
       }
+
+      /* Image container styles */
+      .images {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 1rem;
+        margin-bottom: 1rem;
+      }
+      .images img {
+        flex: 1 1 calc(50% - 1rem);
+        max-width: 100%;
+        height: auto;
+        border-radius: 8px;
+        object-fit: cover;
+      }
     </style>
     <!-- Load React and ReactDOM from CDNs -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
@@ -151,6 +166,10 @@
         return (
           <section>
             <h2>SkyCool vs. Solar PV</h2>
+            <div className="images">
+              <img src="images/skycool_single.png" alt="SkyCool panel" />
+              <img src="images/pv_panel.png" alt="Solar PV panel" />
+            </div>
             <div className="inputs">
               <div className="input-group">
                 <label>Panel area (m²)</label>
@@ -261,6 +280,10 @@
         return (
           <section>
             <h2>SkyCool vs. Chillers</h2>
+            <div className="images">
+              <img src="images/skycool_set.png" alt="SkyCool panels" />
+              <img src="images/dry_chiller.png" alt="Dry chiller" />
+            </div>
             <div className="inputs">
               <div className="input-group">
                 <label>Electricity price ($/kWh)</label>
@@ -420,6 +443,10 @@
         return (
           <section>
             <h2>Data Center Comparison</h2>
+            <div className="images">
+              <img src="images/skycool_acres.png" alt="SkyCool array" />
+              <img src="images/dry_chillers_large.png" alt="Dry chillers outside data center" />
+            </div>
             <div className="inputs">
               <div className="input-group">
                 <label>Location</label>
